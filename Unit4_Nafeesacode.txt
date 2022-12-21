@@ -1,0 +1,181 @@
+#define BLYNK_PRINT Serial
+#define BLYNK_TEMPLATE_ID "TMPLF0Isu6Qd"
+#define BLYNK_DEVICE_NAME "Temperature control LED"
+
+#ifdef __cplusplus
+
+extern "C" {
+
+#endif
+
+uint8_t temprature_sens_read();
+
+#ifdef __cplusplus
+
+}
+
+#endif
+
+uint8_t temprature_sens_read();
+
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include "ThingSpeak.h"
+#include <BlynkSimpleEsp32.h>
+#include "DHT.h"
+#define DHTPIN 4 //DHT PIN    
+
+#define BUZZER_PIN 23 //BUZZER PIN
+
+#define DHTTYPE DHT11   // DHT 11
+/
+#define LED1_PIN 5   // LED PIN
+#define LED2_PIN 19
+
+char auth[] = "8Q5JIJZgapzMGBd5hRWZoCJZ9bmuJ4_L";
+char ssid[] = "Redmi Note 10S";
+char pass[] = "khaisar123";
+WiFiServer server(80);
+
+WiFiClient client;
+unsigned long myChannelNumber = 3;
+
+const char * myWriteAPIKey = "DEGZNID0XJ4RYMUP";
+
+
+
+unsigned long lastTime = 0;
+
+unsigned long timerDelay = 1000;
+
+float humDHT = 0;
+float tempDHT = 0;
+int Val=0;
+
+// Initialize DHT sensor.
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+  Serial.begin(115200);
+  Blynk.begin( auth, ssid , pass );
+  Serial.print("Connecting to ");
+
+  Serial.println(ssid);
+
+  WiFi.begin(ssid, pass);
+
+  while (WiFi.status() != WL_CONNECTED) {
+
+delay(500);
+
+ Serial.print(".");
+  }
+  pinMode(LED1_PIN, OUTPUT);
+  digitalWrite(LED1_PIN, HIGH);
+  pinMode(LED2_PIN, OUTPUT);
+  digitalWrite(LED2_PIN, HIGH);
+  
+  pinMode(BUZZER_PIN,OUTPUT);
+  digitalWrite(BUZZER_PIN,HIGH);
+  
+  Serial.println("");
+
+Serial.println("WiFi connected.");
+
+Serial.println("IP address: ");
+
+Serial.println(WiFi.localIP());
+
+server.begin();
+
+
+
+dht.begin();
+
+ThingSpeak.begin(client); 
+  
+}
+
+BLYNK_WRITE(V3)
+{
+  Val = param.asInt(); // assigning incoming value from pin V3 to a variable
+
+  Serial.print(" The Threshhold value is: ");
+  Serial.println(Val);
+  Serial.println();
+
+}
+
+void loop() {
+  
+  Blynk.run();
+  if ((millis() - lastTime) > timerDelay){
+  // Wait a few seconds between measurements.
+  delay(2000);
+
+  
+  humDHT = dht.readHumidity();
+  // Read temperature as Celsius (the default)
+  tempDHT = dht.readTemperature();
+
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(humDHT) || isnan(tempDHT))
+  {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+  
+
+  Serial.print(F("Temperature: "));
+  Serial.print(tempDHT);
+  Serial.print(F("°C "));
+  Serial.println();
+  Serial.print(F("Humidity: "));
+  Serial.print(humDHT);
+  Serial.print(F("%"));
+  Serial.println();
+  ThingSpeak.setField(1, humDHT);
+
+ThingSpeak.setField(2, tempDHT);
+
+
+
+int x = ThingSpeak.writeFields(myChannelNumber,
+
+myWriteAPIKey);
+
+if(x == 200){
+
+Serial.println("Channel update successful.");
+  
+Serial.println("*********");
+Serial.println();}
+else{
+
+Serial.println("Problem updating channel. HTTP error code " + String(x));
+
+}
+  // Compare Threshold value from Blynk and DHT Temperature value.
+  if (Val < tempDHT)
+  {
+    digitalWrite(BUZZER_PIN,HIGH);
+    digitalWrite(LED1_PIN,HIGH);
+    digitalWrite(LED2_PIN,LOW);
+    
+    
+   
+}
+  else {
+    digitalWrite(LED2_PIN,HIGH);
+    digitalWrite(LED1_PIN, LOW);
+    digitalWrite(BUZZER_PIN,LOW);
+    
+   
+    
+  } 
+
+  Blynk.virtualWrite(V1, tempDHT);
+  Blynk.virtualWrite(V2, humDHT);
+  lastTime = millis();
+}
+}
